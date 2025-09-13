@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>StudyBuddy — Single-file Study System</title>
+
+<!-- pdf.js (browser build) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.8.162/pdf.min.js"></script>
+<!-- Chart.js for analytics -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg1:#ffecd2; --bg2:#fcb69f;
+    --card:#ffffffcc; --muted:#6b7280; --accent:#7c3aed;
+    --glass: rgba(255,255,255,0.7);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+    background: linear-gradient(135deg,var(--bg1),var(--bg2));
+    min-height:100vh;
+    color:#0f172a;
+  }
+  header{
+    display:flex;align-items:center;justify-content:space-between;padding:20px 32px;
+  }
+  .logo{
+    display:flex;gap:14px;align-items:center;font-weight:800;font-size:20px;
+  }
+  .logo .dot{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#06b6d4,#7c3aed);display:flex;align-items:center;justify-content:center;color:white;font-weight:900;box-shadow:0 6px 18px rgba(124,58,237,0.28)}
+  .container{max-width:1200px;margin:0 auto;padding:0 20px 60px}
+  .grid{display:grid;grid-template-columns:320px 1fr 360px;gap:18px}
+  .card{background:var(--card);border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(12,18,50,0.06)}
+  .uploader{display:flex;flex-direction:column;gap:12px}
+  input[type=file]{padding:10px}
+  button{cursor:pointer;border:0;padding:8px 12px;border-radius:10px;font-weight:600}
+  .btn-primary{background:linear-gradient(90deg,#7c3aed,#06b6d4);color:white;box-shadow:0 8px 20px rgba(124,58,237,0.18)}
+  .btn-ghost{background:transparent;border:1px solid rgba(15,23,42,0.06)}
+  .doc-list{margin-top:8px;max-height:44vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
+  .doc-row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:10px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,0.7),rgba(255,255,255,0.5));box-shadow:0 6px 18px rgba(12,18,50,0.04)}
+  .doc-meta{flex:1}
+  .doc-name{font-weight:700}
+  .doc-summary{font-size:13px;color:var(--muted);margin-top:6px}
+  .doc-actions{display:flex;flex-direction:column;gap:8px}
+  .workspace{display:flex;flex-direction:column;gap:12px}
+  .summary{white-space:pre-wrap;background:linear-gradient(90deg,#fff,#f7f7ff);padding:12px;border-radius:10px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .analytics-panel h3{margin:0;font-size:15px;margin-bottom:8px}
+  .chart-wrap{height:180px}
+  .plan-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .plan-item{padding:10px;border-radius:10px;background:linear-gradient(90deg,#fff,#f7fbff);font-size:14px}
+  footer{padding:16px;text-align:center;color:#07203b66}
+  .badge{background:linear-gradient(90deg,#a78bfa,#60a5fa);color:white;padding:6px 8px;border-radius:999px;font-weight:700;font-size:12px}
+  /* modal */
+  .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.45);z-index:60;padding:18px}
+  .modal-card{width:min(900px,96%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:16px}
+  .quiz-question{padding:12px;border-radius:10px;background:#fbfcff;border:1px solid #eef2ff}
+  .option{padding:8px;border-radius:8px;border:1px solid #e6eefb;margin-top:8px;display:block;background:white}
+  .option.selected{border-color:#7c3aed;background:linear-gradient(90deg,#f5ebff,#eef2ff)}
+  .small{font-size:13px;color:var(--muted)}
+  @media (max-width:1000px){ .grid{grid-template-columns:1fr;padding:12px} .container{padding:0 10px} .card{padding:12px} .logo{font-size:16px} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="dot">SB</div>
+    <div>
+      StudyBuddy <div class="small">Personalized study system — all in one file</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:14px;align-items:center">
+    <div class="badge">Interactive • Colorful</div>
+    <div class="small">Local-only mode (no server). Optional OpenAI support below.</div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="grid">
+    <!-- Left: Upload -->
+    <section class="card">
+      <h2 style="margin:0 0 8px 0">Upload Study Materials</h2>
+      <div class="uploader">
+        <input id="fileInput" type="file" accept=".pdf,.txt" />
+        <div class="small">Supported: PDF and plain text. PDFs are parsed inside your browser.</div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button id="btnUpload" class="btn-primary">Add file</button>
+          <button id="btnClearAll" class="btn-ghost">Clear all</button>
+        </div>
+
+        <hr style="margin:12px 0">
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="flex:1">
+            <label class="small">(Optional) Paste OpenAI API Key for AI recommendations</label>
+            <input id="openaiKey" type="password" placeholder="sk-..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #e6eefb;margin-top:6px" />
+            <div class="small">Providing a key enables improved AI-based study plans. Key stays in your browser only.</div>
+          </div>
+          <button id="btnTestAI" class="btn-primary" style="height:42px">Use</button>
+        </div>
+
+        <h3 style="margin-top:12px;margin-bottom:6px">Uploaded Documents</h3>
+        <div id="docList" class="doc-list"></div>
+      </div>
+    </section>
+
+    <!-- Middle: Workspace -->
+    <section class="card workspace">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h2 style="margin:0">Workspace</h2>
+          <div class="small">Select a document to view summary, generate assessments, and take quizzes.</div>
+        </div>
+        <div class="small">Saved locally • <span id="statsCount">0</span> docs</div>
+      </div>
+
+      <div id="workspaceContent" style="display:grid;grid-template-rows:auto 1fr;gap:12px">
+        <div id="noSelection" class="small" style="padding:12px;background:#fffefd;border-radius:10px">No document selected — upload one on the left.</div>
+
+        <div id="docDetails" style="display:none;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div style="flex:1">
+              <h3 id="docTitle" style="margin:0 0 4px 0"></h3>
+              <div id="docSummary" class="summary small"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div id="docStats" class="small">Quizzes: 0 • Avg: —</div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <button id="btnGen" class="btn-primary">Generate Assessments</button>
+                <button id="btnOpenQuiz" class="btn-ghost">Take Latest Quiz</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <button id="btnDelete" class="btn-ghost">Delete document</button>
+            <button id="btnExport" class="btn-ghost">Export JSON</button>
+          </div>
+
+          <div id="quizHistory" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Analytics -->
+    <aside class="card analytics-panel">
+      <h2 style="margin:0 0 8px 0">Analytics & Study Plan</h2>
+
+      <div>
+        <h3>Progress Over Time</h3>
+        <div class="chart-wrap"><canvas id="timeChart"></canvas></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <h3>Per-document averages</h3>
+        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <h3>AI-driven Study Plan</h3>
+        <div id="planBox" class="plan-list"></div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button id="btnPlan" class="btn-primary">Generate Local Plan</button>
+          <button id="btnPlanAI" class="btn-ghost">Generate with OpenAI</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div>Made with ❤️ — StudyBuddy (single-file). Data stays in your browser unless you export it.</div>
+</footer>
+
+<!-- Modal for quiz -->
+<div id="modal" style="display:none" class="modal" aria-hidden="true">
+  <div class="modal-card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 id="quizTitle">Quiz</h3>
+      <div style="display:flex;gap:8px"><div id="modalScore" class="small"></div><button id="modalClose" class="btn-ghost">Close</button></div>
+    </div>
+    <div id="quizContainer" style="margin-top:12px;display:grid;gap:12px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+      <button id="btnSubmitQuiz" class="btn-primary">Submit Answers</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================
+   StudyBuddy Single-file JS
+   All data in localStorage
+   ============================ */
+
+const PDFJS = window['pdfjsLib'];
+if (PDFJS) {
+  // set workerSrc to CDN worker
+  PDFJS.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.8.162/pdf.worker.min.js';
+}
+
+/* ---------- Storage layer ---------- */
+const STORAGE_KEY = 'studybuddy_v1';
+function loadState(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { docs: [], quizzes: [], analytics: [] };
+    return JSON.parse(raw);
+  } catch(e){
+    console.error('loadState', e);
+    return { docs: [], quizzes: [], analytics: [] };
+  }
+}
+function saveState(state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+/* ---------- In-memory ---------- */
+let state = loadState();
+let selectedDocId = null;
+let latestQuiz = null; // {docId, quizzes}
+
+/* ---------- Helpers ---------- */
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function nowISO(){ return new Date().toISOString(); }
+function truncate(s, n=140){ if(!s) return ''; return s.length>n? s.slice(0,n-1)+'…' : s; }
+
+/* ---------- UI references ---------- */
+const fileInput = document.getElementById('fileInput');
+const btnUpload = document.getElementById('btnUpload');
+const docList = document.getElementById('docList');
+const statsCount = document.getElementById('statsCount');
+const noSelection = document.getElementById('noSelection');
+const docDetails = document.getElementById('docDetails');
+const docTitle = document.getElementById('docTitle');
+const docSummary = document.getElementById('docSummary');
+const btnGen = document.getElementById('btnGen');
+const btnOpenQuiz = document.getElementById('btnOpenQuiz');
+const docStats = document.getElementById('docStats');
+const btnDelete = document.getElementById('btnDelete');
+const btnClearAll = document.getElementById('btnClearAll');
+const btnExport = document.getElementById('btnExport');
+const quizHistory = document.getElementById('quizHistory');
+const openaiKeyInput = document.getElementById('openaiKey');
+const btnTestAI = document.getElementById('btnTestAI');
+const timeChartCtx = document.getElementById('timeChart').getContext('2d');
+const barChartCtx = document.getElementById('barChart').getContext('2d');
+const planBox = document.getElementById('planBox');
+const btnPlan = document.getElementById('btnPlan');
+const btnPlanAI = document.getElementById('btnPlanAI');
+
+const modal = document.getElementById('modal');
+const modalClose = document.getElementById('modalClose');
+const quizContainer = document.getElementById('quizContainer');
+const quizTitle = document.getElementById('quizTitle');
+const btnSubmitQuiz = document.getElementById('btnSubmitQuiz');
+const modalScore = document.getElementById('modalScore');
+
+/* ---------- Charts ---------- */
+let timeChart = null;
+let barChart = null;
+
+function initCharts(){
+  if(timeChart) timeChart.destroy();
+  timeChart = new Chart(timeChartCtx, {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Score', data: [], tension:0.3, fill:true, backgroundColor:'rgba(124,58,237,0.12)', borderColor:'#7c3aed', pointRadius:2 }]},
+    options: { responsive:true, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{min:0,max:100}}}
+  });
+
+  if(barChart) barChart.destroy();
+  barChart = new Chart(barChartCtx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ label:'Avg', data: [], backgroundColor:'#60a5fa' }]},
+    options: { indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{min:0,max:100}}}
+  });
+}
+initCharts();
+
+/* ---------- Render ---------- */
+function renderDocs(){
+  docList.innerHTML = '';
+  state.docs.slice().reverse().forEach(d=>{
+    const el = document.createElement('div'); el.className='doc-row';
+    el.innerHTML = `
+      <div class="doc-meta">
+        <div class="doc-name">${escapeHtml(d.name)}</div>
+        <div class="doc-summary">${escapeHtml(truncate(d.summary||'(no summary)',150))}</div>
+        <div class="small" style="margin-top:6px;color:#334155">Uploaded: ${new Date(d.uploadedAt).toLocaleString()}</div>
+      </div>
+      <div class="doc-actions">
+        <button class="btn-ghost btn-open" data-id="${d.id}">Open</button>
+        <button class="btn-ghost btn-export" data-id="${d.id}">JSON</button>
+      </div>
+    `;
+    docList.appendChild(el);
+  });
+
+  Array.from(docList.querySelectorAll('.btn-open')).forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.currentTarget.dataset.id;
+      selectDoc(id);
+    });
+  });
+  Array.from(docList.querySelectorAll('.btn-export')).forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.currentTarget.dataset.id;
+      const doc = state.docs.find(x=>x.id===id);
+      if(!doc) return alert('Not found');
+      const blob = new Blob([JSON.stringify(doc, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download = `${doc.name.replace(/\s+/g,'_')}.json`; a.click();
+      URL.revokeObjectURL(url);
+    });
+  });
+
+  statsCount.innerText = state.docs.length;
+  renderWorkspace();
+  refreshCharts();
+}
+
+function renderWorkspace(){
+  if(!selectedDocId){
+    noSelection.style.display='block';
+    docDetails.style.display='none';
+    return;
+  }
+  const doc = state.docs.find(d=>d.id===selectedDocId);
+  if(!doc){ noSelection.style.display='block'; docDetails.style.display='none'; return; }
+  noSelection.style.display='none';
+  docDetails.style.display='block';
+  docTitle.innerText = doc.name;
+  docSummary.innerText = doc.summary || '(no summary available)';
+  const quizzesForDoc = (state.quizzes.filter(q=>q.docId===doc.id).slice().reverse()[0] || {}).quizzes || [];
+  const analyticsForDoc = state.analytics.filter(a=>a.docId===doc.id);
+  const avg = analyticsForDoc.length ? Math.round(analyticsForDoc.reduce((s,x)=>s+x.score,0)/analyticsForDoc.length) : null;
+  docStats.innerText = `Quizzes: ${quizzesForDoc.length} • Avg: ${avg===null? '—' : avg+'%' }`;
+  // quiz history
+  quizHistory.innerHTML = '';
+  if(analyticsForDoc.length){
+    const list = document.createElement('div'); list.style.display='flex'; list.style.flexDirection='column'; list.style.gap='6px';
+    analyticsForDoc.slice().reverse().forEach(a=>{
+      const it = document.createElement('div'); it.className='small'; it.style.padding='6px'; it.style.borderRadius='8px'; it.style.background='#fbfbff';
+      it.innerText = `${new Date(a.at).toLocaleString()}: ${a.score}%`;
+      list.appendChild(it);
+    });
+    quizHistory.appendChild(list);
+  } else {
+    quizHistory.innerHTML = '<div class="small">No quiz attempts yet.</div>';
+  }
+}
+
+/* ---------- File processing (PDF/text) ---------- */
+async function extractTextFromPDF(file){
+  if(!PDFJS) throw new Error('pdf.js not loaded');
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = PDFJS.getDocument({data: arrayBuffer});
+  const pdf = await loadingTask.promise;
+  let fullText = '';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const strings = content.items.map(it => it.str);
+    fullText += strings.join(' ') + '\n\n';
+  }
+  return fullText.trim();
+}
+
+async function addFile(file){
+  try {
+    const name = file.name || 'unnamed';
+    let text = '';
+    if(file.type === 'application/pdf' || name.toLowerCase().endsWith('.pdf')){
+      text = await extractTextFromPDF(file);
+    } else {
+      text = await file.text();
+    }
+    const summary = autoSummarize(text, 3);
+    const doc = { id: uid(), name, text, summary, uploadedAt: nowISO() };
+    state.docs.push(doc);
+    saveState(state);
+    renderDocs();
+  } catch(e){
+    console.error(e);
+    alert('Error processing file: '+e.message);
+  }
+}
+
+/* ---------- Summarizer (naive) ---------- */
+function autoSummarize(text, sentences=3){
+  if(!text) return '(no text)';
+  // split into sentences by punctuation, then pick first N important-looking ones
+  const sents = text.replace(/\n+/g,' ').split(/(?<=[.?!])\s+/).filter(Boolean);
+  if(sents.length<=sentences) return sents.join(' ');
+  // score sentences by length and presence of colons/capitalization keywords
+  const scored = sents.map(s => ({s, score: Math.min(1, s.length/200) + (/[A-Z]/.test(s[0])?0.1:0)}));
+  scored.sort((a,b)=>b.score-a.score);
+  const top = scored.slice(0,sentences).map(x=>x.s);
+  // return in original order
+  top.sort((a,b)=> text.indexOf(a) - text.indexOf(b));
+  return top.join(' ');
+}
+
+/* ---------- Assessment generation (naive MCQ) ---------- */
+function generateAssessments(docId, count=6){
+  const doc = state.docs.find(d=>d.id===docId); if(!doc) return [];
+  const sentences = doc.text.replace(/\n+/g,' ').split(/(?<=[.?!])\s+/).filter(s=>s.length>30);
+  shuffleArray(sentences);
+  const quizzes = [];
+  let tries=0;
+  for(let i=0; i<sentences.length && quizzes.length<count && tries<sentences.length*3; i++, tries++){
+    const s = sentences[i];
+    // candidate words: words longer than 5 and not purely numeric
+    const words = s.replace(/[.,!?;()\"']/g,'').split(/\s+/).filter(Boolean);
+    const candidates = words.filter(w => w.length>5 && !/^\d+$/.test(w));
+    if(!candidates.length) continue;
+    const answer = candidates[Math.floor(Math.random()*candidates.length)];
+    const regex = new RegExp('\\b'+escapeRegExp(answer)+'\\b','i');
+    if(!regex.test(s)) continue;
+    const qtext = s.replace(regex,'_____');
+    // distractors: other long words from the doc, or simple alterations
+    const pool = Array.from(new Set(flattenWords(doc.text).filter(w=> w.toLowerCase()!==answer.toLowerCase() && w.length>3)));
+    shuffleArray(pool);
+    const options = [answer];
+    for(let j=0;j<3 && j<pool.length;j++) options.push(pool[j]);
+    // if not enough, generate substrings or variants
+    while(options.length<4) options.push(generatePseudoDistractor(answer));
+    shuffleArray(options);
+    quizzes.push({ id: uid(), q: qtext, options, answer });
+  }
+  // save quizzes (append)
+  state.quizzes.push({ docId, quizzes, createdAt: nowISO() });
+  saveState(state);
+  renderDocs();
+  return quizzes;
+}
+
+/* ---------- Quiz runner (modal) ---------- */
+let currentQuiz = null; // {docId, quizzes}
+let currentResponses = {};
+
+function openQuizModal(docId){
+  // find latest quiz for doc
+  const rec = state.quizzes.slice().reverse().find(q=>q.docId===docId);
+  if(!rec){ alert('No quiz generated for this document yet. Generate one first.'); return; }
+  currentQuiz = rec;
+  currentResponses = {};
+  quizTitle.innerText = `Quiz — ${(state.docs.find(d=>d.id===docId)||{}).name || ''}`;
+  quizContainer.innerHTML = '';
+  rec.quizzes.forEach((q, idx)=>{
+    const qwrap = document.createElement('div'); qwrap.className='quiz-question';
+    qwrap.innerHTML = `<div style="font-weight:700">${idx+1}. ${escapeHtml(q.q)}</div>`;
+    // options
+    q.options.forEach(opt=>{
+      const btn = document.createElement('button');
+      btn.className='option';
+      btn.innerText = opt;
+      btn.addEventListener('click', ()=>{
+        // mark selection
+        currentResponses[q.id] = opt;
+        Array.from(qwrap.querySelectorAll('.option')).forEach(b=>b.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+      qwrap.appendChild(btn);
+    });
+    quizContainer.appendChild(qwrap);
+  });
+  modalScore.innerText = '';
+  modal.style.display='flex';
+  modal.setAttribute('aria-hidden','false');
+}
+
+modalClose.addEventListener('click', ()=>{ modal.style.display='none'; modal.setAttribute('aria-hidden','true'); });
+btnSubmitQuiz.addEventListener('click', ()=>{
+  if(!currentQuiz) return;
+  const quizzes = currentQuiz.quizzes;
+  let correct = 0;
+  for(const q of quizzes){
+    if(currentResponses[q.id] && currentResponses[q.id] === q.answer) correct++;
+  }
+  const score = Math.round((correct / quizzes.length) * 100);
+  // store analytics
+  state.analytics.push({ docId: currentQuiz.docId, score, at: nowISO() });
+  saveState(state);
+  modalScore.innerText = `You scored ${score}%`;
+  renderDocs();
+});
+
+/* ---------- Study Plan (local heuristics) ---------- */
+function generateLocalPlan(){
+  // compute per-doc average
+  const docsWithAvg = state.docs.map(d=>{
+    const scores = state.analytics.filter(a=>a.docId===d.id).map(x=>x.score);
+    const avg = scores.length ? Math.round(scores.reduce((s,x)=>s+x,0)/scores.length) : null;
+    return { id:d.id, name:d.name, avg };
+  });
+  // sort: untested (avg null) first, then lowest avg
+  docsWithAvg.sort((a,b)=>{
+    if(a.avg===null && b.avg===null) return 0;
+    if(a.avg===null) return -1;
+    if(b.avg===null) return 1;
+    return a.avg - b.avg;
+  });
+  // plan for next 7 days: weakest docs get more attention
+  const plan = [];
+  for(let i=0;i<Math.min(7, docsWithAvg.length); i++){
+    const d = docsWithAvg[i];
+    const day = new Date(); day.setDate(day.getDate() + i);
+    const task = d.avg===null ? 'Read summary & take an initial quiz' : (d.avg < 60 ? 'Deep revision + 2 practice quizzes' : 'Quick review + 1 quiz');
+    plan.push({ date: day.toISOString().slice(0,10), doc: d.name, task });
+  }
+  renderPlan(plan);
+  return plan;
+}
+
+/* ---------- Optional: generate plan using OpenAI (requires key) ---------- */
+async function generateAIPlan(openaiKey){
+  if(!openaiKey) return alert('Paste your OpenAI API key in the left panel first.');
+  // gather small excerpts per doc to feed model
+  const docs = state.docs.slice(0,8).map(d=>({ id:d.id, name:d.name, summary:d.summary || truncate(d.text,200) }));
+  // construct a concise prompt
+  const prompt = `You are an expert learning designer. Given these documents (name + short summary), produce a 7-day personalized study plan that focuses more on weak documents. For each day output: date (YYYY-MM-DD), document name, and a short task (max 10 words). Documents:\n\n${docs.map(d=>`${d.name}: ${d.summary}`).join('\n\n')}\n\nRespond in JSON array format like [{\"date\":\"2025-09-01\",\"doc\":\"Name\",\"task\":\"...\"}, ...]`;
+  try {
+    // call OpenAI ChatCompletions (gpt-4o-mini or gpt-4o may vary). We'll use fetch to the REST API.
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${openaiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', // user may change
+        messages: [{ role:'system', content:'You are a helpful assistant.' }, { role:'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 600
+      })
+    });
+    if(!res.ok) {
+      const err = await res.json().catch(()=>({message:res.statusText}));
+      console.error('OpenAI error', err);
+      alert('OpenAI error: '+(err?.message || res.statusText));
+      return;
+    }
+    const out = await res.json();
+    const text = out.choices?.[0]?.message?.content || '';
+    // attempt to parse JSON from the reply
+    const jsonStart = text.indexOf('[');
+    const jsonStr = jsonStart>=0 ? text.slice(jsonStart) : text;
+    const plan = JSON.parse(jsonStr);
+    renderPlan(plan);
+    return plan;
+  } catch(e){
+    console.error(e);
+    alert('OpenAI call failed: '+e.message);
+  }
+}
+
+/* ---------- Render plan ---------- */
+function renderPlan(plan){
+  planBox.innerHTML = '';
+  if(!plan || !plan.length){ planBox.innerHTML = '<div class="small">No plan yet</div>'; return; }
+  plan.forEach(p=>{
+    const el = document.createElement('div'); el.className='plan-item';
+    el.innerHTML = `<div style="font-weight:700">${escapeHtml(p.doc || p.document)}</div><div class="small">${p.date} — ${escapeHtml(p.task)}</div>`;
+    planBox.appendChild(el);
+  });
+}
+
+/* ---------- Charts data & refresh ---------- */
+function refreshCharts(){
+  // time chart: last 20 attempts sorted by date
+  const items = state.analytics.slice().sort((a,b)=>new Date(a.at)-new Date(b.at)).slice(-20);
+  const labels = items.map(i=> (new Date(i.at)).toLocaleDateString());
+  const scores = items.map(i=>i.score);
+  timeChart.data.labels = labels;
+  timeChart.data.datasets[0].data = scores;
+  timeChart.update();
+
+  // bar chart: per-doc averages
+  const docAverages = state.docs.map(d=>{
+    const scores = state.analytics.filter(a=>a.docId===d.id).map(x=>x.score);
+    const avg = scores.length ? Math.round(scores.reduce((s,x)=>s+x,0)/scores.length) : 0;
+    return { name: d.name, avg };
+  }).sort((a,b)=>b.avg-a.avg);
+  barChart.data.labels = docAverages.map(d=> truncate(d.name,24) );
+  barChart.data.datasets[0].data = docAverages.map(d=>d.avg);
+  barChart.update();
+}
+
+/* ---------- Utilities ---------- */
+function shuffleArray(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]] } }
+function flattenWords(text){ return (text||'').replace(/[\n\r]/g,' ').split(/\s+/).map(w=>w.replace(/[.,!?;()"'`]/g,'')).filter(Boolean); }
+function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; }); }
+function generatePseudoDistractor(word){
+  if(!word) return '—';
+  if(word.length>6) return word.slice(0,4) + '…';
+  return word.split('').reverse().join('');
+}
+
+/* ---------- Event wiring ---------- */
+btnUpload.addEventListener('click', async ()=>{
+  const file = fileInput.files && fileInput.files[0];
+  if(!file) return alert('Choose a file first (PDF or .txt)');
+  btnUpload.disabled = true; btnUpload.innerText = 'Processing...';
+  await addFile(file);
+  btnUpload.disabled = false; btnUpload.innerText = 'Add file';
+});
+
+btnClearAll.addEventListener('click', ()=>{
+  if(!confirm('Clear all stored documents and analytics?')) return;
+  state = { docs: [], quizzes: [], analytics: [] };
+  saveState(state);
+  selectedDocId = null;
+  renderDocs();
+});
+
+btnGen.addEventListener('click', ()=>{
+  if(!selectedDocId) return alert('Select a doc first');
+  btnGen.disabled = true; btnGen.innerText='Generating...';
+  setTimeout(()=>{ // async feel
+    const quizzes = generateAssessments(selectedDocId, 6);
+    btnGen.disabled = false; btnGen.innerText='Generate Assessments';
+    if(quizzes.length) alert('Generated ' + quizzes.length + ' questions. Open the quiz to take it.');
+  }, 300);
+});
+
+btnOpenQuiz.addEventListener('click', ()=> {
+  if(!selectedDocId) return alert('Select a document');
+  openQuizModal(selectedDocId);
+});
+
+btnDelete.addEventListener('click', ()=>{
+  if(!selectedDocId) return;
+  if(!confirm('Delete this document and associated data?')) return;
+  state.docs = state.docs.filter(d=>d.id!==selectedDocId);
+  state.quizzes = state.quizzes.filter(q=>q.docId!==selectedDocId);
+  state.analytics = state.analytics.filter(a=>a.docId!==selectedDocId);
+  saveState(state);
+  selectedDocId = null;
+  renderDocs();
+});
+
+btnExport.addEventListener('click', ()=>{
+  if(!selectedDocId) return;
+  const doc = state.docs.find(d=>d.id===selectedDocId);
+  if(!doc) return;
+  const exportObj = { doc, quizzes: state.quizzes.filter(q=>q.docId===doc.id), analytics: state.analytics.filter(a=>a.docId===doc.id) };
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download = `${doc.name.replace(/\s+/g,'_')}_export.json`; a.click();
+  URL.revokeObjectURL(url);
+});
+
+btnTestAI.addEventListener('click', ()=>{
+  const key = openaiKeyInput.value.trim();
+  if(!key) return alert('Paste your OpenAI API key into the input first.');
+  alert('OpenAI key saved into this page (not sent anywhere). You can now press "Generate with OpenAI" to request an AI plan.');
+});
+
+btnPlan.addEventListener('click', ()=>generateLocalPlan());
+
+btnPlanAI.addEventListener('click', async ()=>{
+  const key = openaiKeyInput.value.trim();
+  if(!key) return alert('Paste your OpenAI API key into the input first.');
+  btnPlanAI.disabled=true; btnPlanAI.innerText='Calling OpenAI...';
+  await generateAIPlan(key);
+  btnPlanAI.disabled=false; btnPlanAI.innerText='Generate with OpenAI';
+});
+
+/* ---------- Selecting document ---------- */
+function selectDoc(id){
+  selectedDocId = id;
+  renderWorkspace();
+  // update buttons
+  btnOpenQuiz.disabled = false;
+}
+
+/* ---------- startup ---------- */
+renderDocs();
+
+/* ---------- small convenience: allow dragging file onto left area ---------- */
+document.querySelector('.uploader').addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+document.querySelector('.uploader').addEventListener('drop', async e=>{ e.preventDefault(); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if(f){ fileInput.files = e.dataTransfer.files; btnUpload.click(); } });
+
+/* ---------- initial sample content (if empty) ---------- */
+if(state.docs.length===0){
+  const sampleText = `Photosynthesis is the process used by plants, algae and certain bacteria to harness energy from sunlight into chemical energy. 
+  In plants, photosynthesis typically occurs within chloroplasts, where chlorophyll captures light energy. The overall chemical equation for photosynthesis can be summarized as: 6 CO2 + 6 H2O => C6H12O6 + 6 O2. 
+  Key stages include the light-dependent reactions and the Calvin cycle. Understanding the steps and the role of molecules like ATP and NADPH is crucial for studying bioenergetics.`;
+  const sampleDoc = { id: uid(), name: 'Sample: Photosynthesis.txt', text: sampleText, summary: autoSummarize(sampleText,3), uploadedAt: nowISO() };
+  state.docs.push(sampleDoc);
+  saveState(state);
+  renderDocs();
+}
+
+</script>
+</body>
+</html>
